@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Apostador</title>
+
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎲</text></svg>" />
+
+  <!-- Supabase SDK (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="app-header">
+    <a href="#/" class="brand" aria-label="Início">
+      <span class="brand-logo">🎲</span>
+      <span class="brand-name">Apostador</span>
+    </a>
+
+    <nav class="app-nav" id="nav-main">
+      <a href="#/"            data-nav="home">Início</a>
+      <a href="#/meus"        data-nav="meus" hidden>Meus bolões</a>
+      <a href="#/admin"       data-nav="admin" hidden>Admin</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-theme" title="Alternar tema" aria-label="Alternar tema">🌙</button>
+      <button class="icon-btn" id="btn-logout" title="Sair" aria-label="Sair" hidden>⏻</button>
+      <a href="#/login" class="btn btn-ghost btn-sm" id="btn-login">Entrar</a>
+    </div>
+  </header>
+
+  <!-- ===== CONTEÚDO (SPA) ===== -->
+  <main id="app" class="app-main" aria-live="polite">
+    <div class="loading-screen">
+      <div class="spinner"></div>
+    </div>
+  </main>
+
+  <!-- ===== TOASTS ===== -->
+  <div id="toasts" class="toasts" aria-live="assertive"></div>
+
+  <!-- ===== MODAL ===== -->
+  <div id="modal-root" class="modal-root" hidden></div>
+
+  <!-- ===== SCRIPTS ===== -->
+  <script src="js/supabase.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/sorteios.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
