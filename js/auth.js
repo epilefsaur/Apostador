@@ -108,6 +108,127 @@ async function signIn({ phone, password }) {
   return currentProfile;
 }
 
+
+/* ---------- Login ou cadastro em uma única chamada ---------- */
+// Regra:
+//  1) Tenta login primeiro (só precisa celular + senha).
+//  2) Se falhar porque o usuário NÃO existe no Auth -> exige nome e cria.
+//  3) Se falhar porque a senha está errada -> mensagem clara.
+//  4) Após criar ou logar, garante que o profile exista (recria se o
+//     trigger falhou em cadastros antigos).
+async function signInOrSignUp({ fullName, phone, password }) {
+  if (!isValidPhone(phone)) throw new Error('Celular inválido. Use DDD + 9 dígitos.');
+  if (!password || password.length < 6) throw new Error('A senha deve ter ao menos 6 caracteres.');
+
+  const normalizedPhone = normalizePhone(phone);
+  const email = phoneToEmail(normalizedPhone);
+
+  // ---- 1) Tenta login primeiro ----
+  const { error: loginErr } = await db.auth.signInWithPassword({ email, password });
+
+  if (!loginErr) {
+    // Login OK: garante profile (nome só usado se o profile estiver faltando)
+    await ensureProfile({
+      fullName: (fullName || '').trim() || 'Participante',
+      phone: normalizedPhone,
+    });
+    await loadSession();
+    return { mode: 'login', profile: currentProfile };
+  }
+
+  const isInvalidLogin = /invalid login/i.test(loginErr.message);
+
+  // ---- 2) Não existe no Auth -> exige nome e cria ----
+  if (isInvalidLogin) {
+    if (!fullName || !fullName.trim()) {
+      throw new Error('Informe seu nome completo para criar a conta.');
+    }
+
+    const { data, error: signupErr } = await db.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName.trim(), phone: normalizedPhone } },
+    });
+
+    if (signupErr) {
+      // Corrida: alguém criou o mesmo celular entre o login e o signup
+      if (/already registered|user already exists/i.test(signupErr.message)) {
+        throw new Error('Este celular acabou de ser cadastrado. Tente entrar novamente.');
+      }
+      throw signupErr;
+    }
+
+    if (!data.session) {
+      const { error: signInErr } = await db.auth.signInWithPassword({ email, password });
+      if (signInErr) throw signInErr;
+    }
+
+    await ensureProfile({ fullName: fullName.trim(), phone: normalizedPhone });
+    await loadSession();
+    return { mode: 'signup', profile: currentProfile };
+  }
+
+  // ---- 3) Outro erro (senha errada, rede, etc.) ----
+  throw new Error('Senha incorreta para este celular. Tente novamente.');
+}
+
+/* ---------- Garante que o profile existe para o usuário logado ---------- */
+async function ensureProfile({ fullName, phone }) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session?.user) return;
+
+  const { data: existing } = await db
+    .from('profiles')
+    .select('id')
+    .eq('id', session.user.id)
+    .maybeSingle();
+
+  if (existing) return;
+
+  const { error } = await db.from('profiles').insert({
+    id: session.user.id,
+    full_name: fullName,
+    phone: normalizePhone(phone),
+    is_admin: false,
+  });
+
+  if (error) {
+    if (!/duplicate key/i.test(error.message)) {
+      console.error('ensureProfile', error);
+    }
+  }
+}
+
+/* ---------- Garante que o profile existe para o usuário logado ---------- */
+async function ensureProfile({ fullName, phone }) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session?.user) return;
+
+  const { data: existing } = await db
+    .from('profiles')
+    .select('id')
+    .eq('id', session.user.id)
+    .maybeSingle();
+
+  if (existing) return;
+
+  // Cria o profile manualmente (contorna trigger ausente)
+  const { error } = await db.from('profiles').insert({
+    id: session.user.id,
+    full_name: fullName,
+    phone: normalizePhone(phone),
+    is_admin: false,
+  });
+
+  if (error) {
+    // Corrida: trigger criou ao mesmo tempo. Ignora "duplicate key".
+    if (!/duplicate key/i.test(error.message)) {
+      console.error('ensureProfile', error);
+    }
+  }
+}
+
+
 /* ---------- Logout ---------- */
 async function signOut() {
   await db.auth.signOut();
@@ -119,10 +240,11 @@ async function signOut() {
 }
 
 /* ---------- Guardas ---------- */
-function requireAuth() {
+function requireAuth(nextPath) {
   if (!currentUser) {
     toast('Faça login para continuar.', 'error');
-    navigate('/login');
+    const next = nextPath ? `?next=${encodeURIComponent(nextPath)}` : '';
+    navigate('/acesso' + next);
     return false;
   }
   return true;

@@ -27,7 +27,6 @@ async function pageAdmin() {
     return wrap;
   }
 
-  // Contadores por status
   const cont = { aberto: 0, em_andamento: 0, finalizado: 0 };
   lista.forEach(s => cont[effectiveStatus(s)]++);
 
@@ -91,16 +90,21 @@ function formSorteio(sorteio) {
   const inputPrazo  = input({ label: 'Prazo para participar', name: 'prazo_participacao', type: 'datetime-local', value: toLocalInput(sorteio?.prazo_participacao), required: true });
   const inputValor  = input({ label: 'Valor da cota (R$)', name: 'valor_cota', type: 'number', step: '0.01', min: '0.01', value: sorteio?.valor_cota || '', required: true });
   const inputPix    = input({ label: 'PIX copia e cola / chave', name: 'pix_chave', value: sorteio?.pix_chave || '', required: true, placeholder: 'Cole o código PIX ou a chave' });
-  const inputPremio = input({
-  label: 'Prêmio estimado (R$) — opcional',
-  name: 'premio_total',
-  type: 'number',
-  step: '0.01',
-  min: '0',
-  value: sorteio?.premio_total || '',
-  placeholder: '0,00',
-});
 
+  // Prêmio estimado — campo de texto com parse robusto
+  const inputPremio = el('div', { class: 'form-group' }, [
+    el('label', { class: 'form-label' }, 'Prêmio estimado (R$) — opcional'),
+    el('input', {
+      class: 'input',
+      type: 'text',
+      inputmode: 'decimal',
+      name: 'premio_total',
+      placeholder: 'Ex.: 1000000000 ou 1.000.000.000,00',
+      value: sorteio?.premio_total != null ? String(sorteio.premio_total) : '',
+    }),
+    el('div', { class: 'form-hint' },
+      'Pode digitar com ou sem separador de milhar. O valor é salvo com 2 casas.'),
+  ]);
 
   const textareaDesc = el('div', { class: 'form-group' }, [
     el('label', { class: 'form-label' }, 'Descrição / como funciona'),
@@ -188,15 +192,20 @@ function formSorteio(sorteio) {
         descricao: fd.get('descricao')?.toString().trim() || null,
         data_sorteio: fd.get('data_sorteio') ? new Date(fd.get('data_sorteio')).toISOString() : null,
         prazo_participacao: new Date(fd.get('prazo_participacao')).toISOString(),
-        valor_cota: Number(fd.get('valor_cota')),
+        valor_cota: parseMoedaBR(fd.get('valor_cota')),
         pix_chave: fd.get('pix_chave')?.toString().trim(),
-        premio_total: fd.get('premio_total') ? Number(fd.get('premio_total')) : null,
+        premio_total: parseMoedaBR(fd.get('premio_total')),
         imagem_capa_url: uploadedUrl,
       };
 
-      if (!payload.titulo || !payload.tipo_jogo || !payload.prazo_participacao
-          || !payload.valor_cota || !payload.pix_chave) {
+      if (!payload.titulo || !payload.tipo_jogo || !payload.prazo_participacao || !payload.pix_chave) {
         throw new Error('Preencha todos os campos obrigatórios.');
+      }
+      if (payload.valor_cota == null || payload.valor_cota <= 0) {
+        throw new Error('Informe o valor da cota.');
+      }
+      if (fd.get('premio_total') && payload.premio_total == null) {
+        throw new Error('Prêmio estimado inválido. Use apenas números.');
       }
 
       if (isEdit) {
@@ -496,7 +505,6 @@ function blocoAdminResultado(sorteio, aprovadas, st) {
                 : st === 'em_andamento' ? '🏁 Resultado (aguardando sorteio)'
                 : '🎁 Prêmio estimado (opcional)';
   wrap.appendChild(el('h3', { style: 'font-size:.95rem;margin-bottom:.6rem;' }, titulo));
- 
 
   if (st === 'finalizado') {
     wrap.appendChild(el('div', { class: 'text-sm text-muted mb-1' }, 'Dezenas sorteadas:'));
@@ -520,9 +528,11 @@ function blocoAdminResultado(sorteio, aprovadas, st) {
     value: (sorteio.numeros_sorteados || []).join(' '),
   });
   const inputPremio = el('input', {
-    class: 'input', type: 'number', step: '0.01', min: '0',
-    placeholder: '0,00',
-    value: sorteio.premio_total || '',
+    class: 'input',
+    type: 'text',
+    inputmode: 'decimal',
+    placeholder: 'Ex.: 1000000000 ou 1.000.000.000,00',
+    value: sorteio.premio_total != null ? String(sorteio.premio_total) : '',
   });
   const selectGanhamos = el('select', { class: 'select' }, [
     el('option', { value: '' }, 'Ainda não sei'),
@@ -550,9 +560,12 @@ function blocoAdminResultado(sorteio, aprovadas, st) {
     class: 'btn btn-primary btn-block',
     onClick: async () => {
       const numeros = inputNums.value.split(/[\s,\-]+/).map(s => s.trim()).filter(Boolean);
-      const premio = inputPremio.value ? Number(inputPremio.value) : null;
+      const premio = parseMoedaBR(inputPremio.value);
       const ganhamos = selectGanhamos.value === 'sim' ? true
         : selectGanhamos.value === 'nao' ? false : null;
+      if (inputPremio.value && premio == null) {
+        toast('Prêmio inválido. Use apenas números.', 'error'); return;
+      }
       if (!numeros.length) { toast('Informe as dezenas sorteadas.', 'error'); return; }
       const { error } = await db.from('sorteios').update({
         numeros_sorteados: numeros,

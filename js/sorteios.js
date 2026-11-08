@@ -19,7 +19,6 @@ async function pageHome() {
 
   const container = el('div');
 
-  // Cabeçalho / boas-vindas
   if (currentProfile) {
     container.appendChild(el('h1', { class: 'page-title' }, [
       `Olá, ${currentProfile.full_name.split(' ')[0]} 👋`,
@@ -90,7 +89,6 @@ async function pageSorteio({ id }) {
 
   const st = effectiveStatus(sorteio);
 
-  // Participações aprovadas (para contagem e lista, se autorizado pela RLS)
   const { data: aprovadas } = await db
     .from('participacoes')
     .select('id, user_id, valor_cota, status, declarado_em, profiles!participacoes_user_id_fkey(full_name, phone)')
@@ -101,7 +99,6 @@ async function pageSorteio({ id }) {
   const totalCotas = listaAprovadas.length;
   const totalArrecadado = listaAprovadas.reduce((acc, p) => acc + Number(p.valor_cota), 0);
 
-  // Minhas participações neste sorteio
   let minhas = [];
   if (currentUser) {
     const { data } = await db
@@ -115,6 +112,8 @@ async function pageSorteio({ id }) {
   const minhasAprovadas = minhas.filter(p => p.status === 'aprovado');
   const minhasPendentes = minhas.filter(p => p.status === 'pendente');
   const tenhoAprovada = minhasAprovadas.length > 0;
+
+  const podeVer = tenhoAprovada || currentProfile?.is_admin;
 
   const container = el('div');
 
@@ -150,11 +149,15 @@ async function pageSorteio({ id }) {
     ]));
   }
 
-  // Stats (visíveis para aprovados ou admin)
-  if (tenhoAprovada || currentProfile?.is_admin) {
+  // Stats + participantes (só para quem tem cota aprovada ou admin)
+  if (podeVer) {
     container.appendChild(statsSorteio({
       totalCotas, totalArrecadado, minhasAprovadas, sorteio,
     }));
+
+    container.appendChild(blocoParticipantesAgrupados(
+      listaAprovadas, totalCotas, sorteio
+    ));
   }
 
   // Ações principais
@@ -162,15 +165,14 @@ async function pageSorteio({ id }) {
     sorteio, st, minhasPendentes, tenhoAprovada,
   }));
 
-  // Minhas participações (se houver)
+  // Minhas participações
   if (minhas.length) {
     container.appendChild(blocoMinhasParticipacoes(minhas));
   }
 
-  // Lista de participantes aprovados (para aprovados e admin)
-  if (tenhoAprovada || currentProfile?.is_admin) {
-    container.appendChild(blocoParticipantes(listaAprovadas, sorteio));
-    container.appendChild(await blocoJogosRealizados(sorteio, tenhoAprovada || currentProfile?.is_admin));
+  // Jogos realizados
+  if (podeVer) {
+    container.appendChild(await blocoJogosRealizados(sorteio, podeVer));
   }
 
   // Resultado final
@@ -191,9 +193,21 @@ function infoRow(label, value) {
 function statsSorteio({ totalCotas, totalArrecadado, minhasAprovadas, sorteio }) {
   const minhasCotas = minhasAprovadas.length;
   const minhaFracao = totalCotas ? minhasCotas / totalCotas : 0;
-  const premioPorCota = sorteio.premio_total && totalCotas
-    ? Number(sorteio.premio_total) / totalCotas : null;
-  const meuPremio = premioPorCota != null ? premioPorCota * minhasCotas : null;
+
+  // Cálculo em centavos para evitar erro de ponto flutuante
+  const premioTotalCentavos = sorteio.premio_total
+    ? Math.round(Number(sorteio.premio_total) * 100)
+    : null;
+
+  let premioPorCotaCentavos = null;
+  let meuPremioCentavos = null;
+  if (premioTotalCentavos != null && totalCotas > 0) {
+    premioPorCotaCentavos = Math.floor(premioTotalCentavos / totalCotas);
+    meuPremioCentavos = premioPorCotaCentavos * minhasCotas;
+  }
+
+  const premioPorCota = premioPorCotaCentavos != null ? premioPorCotaCentavos / 100 : null;
+  const meuPremio = meuPremioCentavos != null ? meuPremioCentavos / 100 : null;
 
   return el('div', { class: 'card card-pad mb-2' }, [
     el('h3', { style: 'font-size:.95rem;margin-bottom:.6rem;' }, '📊 Números do bolão'),
@@ -201,27 +215,27 @@ function statsSorteio({ totalCotas, totalArrecadado, minhasAprovadas, sorteio })
       stat('Total arrecadado', fmtBRL(totalArrecadado)),
       stat('Cotas vendidas', String(totalCotas)),
       stat('Minhas cotas', String(minhasCotas), true),
-      stat('Minha fração', `${(minhaFracao * 100).toFixed(1)}%`, true),
+      stat('Minha fração', `${(minhaFracao * 100).toFixed(2)}%`, true),
     ]),
     premioPorCota != null
-  ? el('div', { class: 'mt-2 text-sm' }, [
-      el('div', { class: 'row-between' }, [
-        el('span', { class: 'text-muted' }, 'Prêmio estimado total'),
-        el('strong', {}, fmtBRL(sorteio.premio_total)),
-      ]),
-      el('div', { class: 'row-between' }, [
-        el('span', { class: 'text-muted' }, 'Estimativa por cota'),
-        el('strong', {}, fmtBRL(premioPorCota)),
-      ]),
-      el('div', { class: 'row-between', style: 'color:var(--primary);font-weight:700;' }, [
-        el('span', {}, 'Sua estimativa'),
-        el('span', {}, fmtBRL(meuPremio)),
-      ]),
-      el('div', { class: 'form-hint mt-1' },
-        'Valores estimados — o prêmio real será confirmado após o sorteio.'),
-    ])
-  : el('div', { class: 'mt-2 text-sm text-soft' },
-      'Prêmio a definir — o administrador informará o valor estimado.'),
+      ? el('div', { class: 'mt-2 text-sm' }, [
+          el('div', { class: 'row-between' }, [
+            el('span', { class: 'text-muted' }, 'Prêmio estimado total'),
+            el('strong', {}, fmtBRL(premioTotalCentavos / 100)),
+          ]),
+          el('div', { class: 'row-between' }, [
+            el('span', { class: 'text-muted' }, 'Estimativa por cota'),
+            el('strong', {}, fmtBRL(premioPorCota)),
+          ]),
+          el('div', { class: 'row-between', style: 'color:var(--primary);font-weight:700;' }, [
+            el('span', {}, 'Sua estimativa'),
+            el('span', {}, fmtBRL(meuPremio)),
+          ]),
+          el('div', { class: 'form-hint mt-1' },
+            'Valores estimados — o prêmio real será confirmado após o sorteio.'),
+        ])
+      : el('div', { class: 'mt-2 text-sm text-soft' },
+          'Prêmio a definir — o administrador informará o valor estimado.'),
   ]);
 }
 
@@ -235,11 +249,9 @@ function stat(label, value, primary = false) {
 function acoesSorteio({ sorteio, st, minhasPendentes, tenhoAprovada }) {
   const wrap = el('div', { class: 'card card-pad mb-2' });
 
-  // Aviso de cotas
   wrap.appendChild(el('div', { class: 'text-sm text-muted mb-2' },
     `Cada participação = 1 cota de ${fmtBRL(sorteio.valor_cota)}. Para mais cotas, refaça o processo.`));
 
-  // Pendentes
   if (minhasPendentes.length) {
     wrap.appendChild(el('div', {
       class: 'card card-pad',
@@ -255,7 +267,7 @@ function acoesSorteio({ sorteio, st, minhasPendentes, tenhoAprovada }) {
     if (!currentUser) {
       wrap.appendChild(el('button', {
         class: 'btn btn-primary btn-block btn-lg',
-        onClick: () => navigate(`/login?next=${encodeURIComponent('/sorteio/' + sorteio.id)}`),
+        onClick: () => navigate(`/acesso?next=${encodeURIComponent('/pagamento/' + sorteio.id)}`),
       }, 'Entrar para participar'));
     } else {
       const label = tenhoAprovada ? 'Adicionar + 1 cota' : 'Participar';
@@ -290,25 +302,93 @@ function blocoMinhasParticipacoes(minhas) {
   ]);
 }
 
-function blocoParticipantes(participantes, sorteio) {
-  const total = participantes.length;
-  return el('div', { class: 'card card-pad mb-2' }, [
+function blocoParticipantesAgrupados(participantes, totalCotas, sorteio) {
+  // 1) Agrupa por user_id
+  const mapa = new Map();
+  for (const p of participantes) {
+    const uid = p.user_id;
+    if (!mapa.has(uid)) {
+      mapa.set(uid, {
+        user_id: uid,
+        full_name: p.profiles?.full_name || 'Participante',
+        phone: p.profiles?.phone || '',
+        cotas: 0,
+        totalPago: 0,
+      });
+    }
+    const item = mapa.get(uid);
+    item.cotas += 1;
+    item.totalPago += Number(p.valor_cota);
+  }
+
+  const grupos = Array.from(mapa.values());
+
+  // 2) Ordena: mais cotas primeiro; empate -> alfabético (pt-BR)
+  grupos.sort((a, b) => {
+    if (b.cotas !== a.cotas) return b.cotas - a.cotas;
+    return a.full_name.localeCompare(b.full_name, 'pt-BR', { sensitivity: 'base' });
+  });
+
+  // 3) Prêmio estimado por cota em centavos (sem dízima)
+  const premioTotalCentavos = sorteio.premio_total
+    ? Math.round(Number(sorteio.premio_total) * 100)
+    : null;
+  const premioPorCotaCentavos = (premioTotalCentavos != null && totalCotas > 0)
+    ? Math.floor(premioTotalCentavos / totalCotas)
+    : null;
+  const premioPorCota = premioPorCotaCentavos != null ? premioPorCotaCentavos / 100 : null;
+
+  const wrap = el('div', { class: 'card card-pad mb-2' }, [
     el('h3', { style: 'font-size:.95rem;margin-bottom:.6rem;' },
-      `👥 Participantes confirmados (${total})`),
-    total === 0
-      ? el('div', { class: 'text-sm text-soft' }, 'Nenhum participante confirmado ainda.')
-      : el('div', { class: 'list' }, participantes.map(p => {
-          const nome = p.profiles?.full_name || 'Participante';
-          const iniciais = nome.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
-          return el('div', { class: 'list-item' }, [
-            el('div', { class: 'avatar' }, iniciais),
-            el('div', { class: 'info' }, [
-              el('div', { class: 'name' }, nome),
-              el('div', { class: 'sub' }, fmtBRL(p.valor_cota)),
-            ]),
-          ]);
-        })),
+      `👥 Participantes confirmados (${grupos.length})`),
   ]);
+
+  if (!grupos.length) {
+    wrap.appendChild(el('div', { class: 'text-sm text-soft' },
+      'Nenhum participante confirmado ainda.'));
+    return wrap;
+  }
+
+  const list = el('div', { class: 'list' });
+  for (const g of grupos) {
+    const iniciais = g.full_name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
+    const premioEstimadoCentavos = premioPorCotaCentavos != null
+      ? premioPorCotaCentavos * g.cotas
+      : null;
+    const premioEstimado = premioEstimadoCentavos != null
+      ? premioEstimadoCentavos / 100
+      : null;
+
+    list.appendChild(el('div', { class: 'list-item' }, [
+      el('div', { class: 'avatar' }, iniciais),
+      el('div', { class: 'info' }, [
+        el('div', { class: 'name' }, g.full_name),
+        el('div', { class: 'sub' }, [
+          `${g.cotas} cota${g.cotas > 1 ? 's' : ''} • ${fmtBRL(g.totalPago)}`,
+          premioEstimado != null
+            ? el('span', { style: 'color:var(--primary);font-weight:600;' },
+                ` • estimativa ${fmtBRL(premioEstimado)}`)
+            : null,
+        ]),
+      ]),
+      el('div', {
+        style: 'font-weight:700;color:var(--primary);font-size:.95rem;white-space:nowrap;',
+        title: premioEstimado != null ? 'Prêmio estimado' : '',
+      }, g.cotas === 1 ? '1 cota' : `${g.cotas} cotas`),
+    ]));
+  }
+
+  wrap.appendChild(list);
+
+  if (premioPorCota != null) {
+    wrap.appendChild(el('div', { class: 'form-hint mt-1' },
+      'Estimativa calculada com base no prêmio informado pelo administrador. O valor real é confirmado após o sorteio.'));
+  } else {
+    wrap.appendChild(el('div', { class: 'form-hint mt-1' },
+      'A estimativa de prêmio aparecerá aqui quando o administrador informar o valor do prêmio.'));
+  }
+
+  return wrap;
 }
 
 async function blocoJogosRealizados(sorteio, podeVer) {
@@ -345,8 +425,13 @@ async function blocoJogosRealizados(sorteio, podeVer) {
 function blocoResultado(sorteio, participantes, tenhoAprovada) {
   const numeros = sorteio.numeros_sorteados || [];
   const totalCotas = participantes.length;
-  const premioTotal = Number(sorteio.premio_total || 0);
-  const premioPorCota = totalCotas && premioTotal ? premioTotal / totalCotas : 0;
+  const premioTotalCentavos = sorteio.premio_total
+    ? Math.round(Number(sorteio.premio_total) * 100)
+    : 0;
+  const premioPorCotaCentavos = (totalCotas && premioTotalCentavos)
+    ? Math.floor(premioTotalCentavos / totalCotas)
+    : 0;
+  const premioPorCota = premioPorCotaCentavos / 100;
 
   const wrap = el('div', { class: 'card card-pad mb-2' }, [
     el('h3', { style: 'font-size:.95rem;margin-bottom:.6rem;' }, '🏁 Resultado oficial'),
@@ -366,10 +451,10 @@ function blocoResultado(sorteio, participantes, tenhoAprovada) {
     }, sorteio.ganhamos ? '🏆 Ganhamos!' : 'Não foi dessa vez'),
   ]));
 
-  if (premioTotal > 0) {
+  if (premioTotalCentavos > 0) {
     wrap.appendChild(el('div', { class: 'row-between text-sm' }, [
       el('span', { class: 'text-muted' }, 'Prêmio total'),
-      el('strong', {}, fmtBRL(premioTotal)),
+      el('strong', {}, fmtBRL(premioTotalCentavos / 100)),
     ]));
     wrap.appendChild(el('div', { class: 'row-between text-sm' }, [
       el('span', { class: 'text-muted' }, 'Prêmio por cota'),
@@ -377,14 +462,14 @@ function blocoResultado(sorteio, participantes, tenhoAprovada) {
     ]));
 
     if (tenhoAprovada) {
-      // contar minhas cotas aprovadas
       const minhas = participantes.filter(p => p.user_id === currentUser.id).length;
+      const meuPremioCentavos = premioPorCotaCentavos * minhas;
       wrap.appendChild(el('div', {
         class: 'row-between mt-1',
         style: 'color:var(--primary);font-weight:700;',
       }, [
         el('span', {}, `Seu prêmio (${minhas} cota${minhas > 1 ? 's' : ''})`),
-        el('span', {}, fmtBRL(premioPorCota * minhas)),
+        el('span', {}, fmtBRL(meuPremioCentavos / 100)),
       ]));
     }
   } else {
@@ -396,8 +481,7 @@ function blocoResultado(sorteio, participantes, tenhoAprovada) {
 }
 
 /* ============================================================
-   PAGAMENTO — tela com PIX e botão "Já efetuei o pagamento"
-   AQUI é o único lugar que CRIA a participação (pendente).
+   PAGAMENTO
    ============================================================ */
 async function pagePagamento({ id }) {
   if (!requireAuth()) return el('div');
@@ -429,20 +513,17 @@ async function pagePagamento({ id }) {
     ]),
   ]));
 
-  // PIX
   const pixCard = el('div', { class: 'card card-pad mb-2' });
   pixCard.appendChild(el('h3', { style: 'font-size:.95rem;margin-bottom:.5rem;' }, '🔑 PIX Copia e Cola'));
   pixCard.appendChild(el('div', { class: 'pix-box', id: 'pix-text' }, sorteio.pix_chave));
 
-  const btnCopy = el('button', {
+  pixCard.appendChild(el('button', {
     class: 'btn btn-secondary btn-block mb-2',
     onClick: async () => {
       const ok = await copyText(sorteio.pix_chave);
       toast(ok ? 'PIX copiado!' : 'Não foi possível copiar.', ok ? 'success' : 'error');
     },
-  }, '📋 Copiar PIX');
-
-  pixCard.appendChild(btnCopy);
+  }, '📋 Copiar PIX'));
 
   const btnPago = el('button', {
     class: 'btn btn-success btn-block btn-lg',
@@ -450,14 +531,24 @@ async function pagePagamento({ id }) {
       btnPago.disabled = true;
       btnPago.textContent = 'Registrando...';
       try {
+        const { data: { session } } = await db.auth.getSession();
+        if (!session?.user) {
+          toast('Sua sessão expirou. Faça login novamente.', 'error');
+          navigate(`/acesso?next=${encodeURIComponent('/pagamento/' + sorteio.id)}`);
+          return;
+        }
+
         const { error: insErr } = await db.from('participacoes').insert({
           sorteio_id: sorteio.id,
-          user_id: currentUser.id,
+          user_id: session.user.id,
           valor_cota: sorteio.valor_cota,
           status: 'pendente',
           declarado_em: new Date().toISOString(),
         });
         if (insErr) throw insErr;
+
+        await loadSession();
+
         toast('Pagamento registrado! Aguarde a aprovação do administrador.', 'success', 4000);
         navigate(`/sorteio/${sorteio.id}`);
       } catch (e) {
@@ -500,7 +591,6 @@ async function pageMeus() {
     return wrap;
   }
 
-  // Agrupar por sorteio
   const porSorteio = new Map();
   for (const p of items) {
     if (!porSorteio.has(p.sorteio_id)) porSorteio.set(p.sorteio_id, { sorteio: p.sorteios, parts: [] });

@@ -108,6 +108,31 @@ const fmtBRL = (v) => {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
+// Converte string em R$ para número, aceitando:
+//   "1000000000", "1.000.000.000", "1.000.000.000,00", "1000.50"
+// Retorna null se vazio/ inválido/ negativo.
+function parseMoedaBR(raw) {
+  if (raw == null) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+
+  // Remove "R$" e espaços
+  s = s.replace(/R\$\s*/gi, '').trim();
+
+  // Se tem vírgula -> formato BR: ponto = milhar, vírgula = decimal
+  if (s.includes(',')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  }
+  // Sem vírgula: remove pontos que sejam separador de milhar
+  else {
+    s = s.replace(/\.(?=\d{3}(?:\D|$))/g, '');
+  }
+
+  const n = Number(s);
+  if (!isFinite(n) || n < 0) return null;
+  return n;
+}
+
 function fmtDateTime(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -197,25 +222,6 @@ function statusLabel(status) {
   })[status] || status;
 }
 
-function initMobileMenu() {
-  const toggle = $('#menu-toggle');
-  const drawer = $('#mobile-drawer');
-  if (!toggle || !drawer) return;
-
-  const open  = () => { drawer.hidden = false; document.body.style.overflow = 'hidden'; };
-  const close = () => { drawer.hidden = true;  document.body.style.overflow = ''; };
-
-  toggle.addEventListener('click', () => {
-    drawer.hidden ? open() : close();
-  });
-  drawer.querySelector('[data-close]')?.addEventListener('click', close);
-  drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', close));
-
-  // Fecha ao navegar por hash (caso o usuário use o histórico)
-  window.addEventListener('hashchange', close);
-}
-
-/* ---------- Tema ---------- */
 /* ---------- Tema ---------- */
 function initTheme() {
   const saved = localStorage.getItem('apostador-theme');
@@ -250,14 +256,7 @@ function initMobileMenu() {
   drawer.querySelector('[data-close]')?.addEventListener('click', close);
   drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', close));
 
-  // Fecha ao navegar por hash
   window.addEventListener('hashchange', close);
-}
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  localStorage.setItem('apostador-theme', theme);
-  const btn = $('#btn-theme');
-  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
 }
 
 /* ---------- Loading ---------- */
