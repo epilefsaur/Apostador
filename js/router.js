@@ -43,12 +43,18 @@ async function renderRoute() {
   const match = matchRoute(path);
   const app = $('#app');
 
-  // Atualiza nav ativo
+  // Atualiza nav ativo (desktop e mobile)
   $$('.app-nav a').forEach(a => a.classList.remove('active'));
+  $$('.mobile-drawer-panel a').forEach(a => a.classList.remove('active'));
+
   const navKey = path.startsWith('/admin') ? 'admin'
     : path.startsWith('/meus') ? 'meus'
     : path === '/' ? 'home' : null;
-  if (navKey) $(`.app-nav a[data-nav="${navKey}"]`)?.classList.add('active');
+
+  if (navKey) {
+    $(`.app-nav a[data-nav="${navKey}"]`)?.classList.add('active');
+    $(`.mobile-drawer-panel a[data-nav="${navKey}"]`)?.classList.add('active');
+  }
 
   if (!match) {
     app.innerHTML = '';
@@ -72,7 +78,6 @@ async function renderRoute() {
     ]));
   }
 }
-
 function navigate(path) {
   if (location.hash === '#' + path) renderRoute();
   else location.hash = path;

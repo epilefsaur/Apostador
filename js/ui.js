@@ -197,6 +197,25 @@ function statusLabel(status) {
   })[status] || status;
 }
 
+function initMobileMenu() {
+  const toggle = $('#menu-toggle');
+  const drawer = $('#mobile-drawer');
+  if (!toggle || !drawer) return;
+
+  const open  = () => { drawer.hidden = false; document.body.style.overflow = 'hidden'; };
+  const close = () => { drawer.hidden = true;  document.body.style.overflow = ''; };
+
+  toggle.addEventListener('click', () => {
+    drawer.hidden ? open() : close();
+  });
+  drawer.querySelector('[data-close]')?.addEventListener('click', close);
+  drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', close));
+
+  // Fecha ao navegar por hash (caso o usuário use o histórico)
+  window.addEventListener('hashchange', close);
+}
+
+/* ---------- Tema ---------- */
 /* ---------- Tema ---------- */
 function initTheme() {
   const saved = localStorage.getItem('apostador-theme');
@@ -208,6 +227,31 @@ function initTheme() {
     const cur = document.documentElement.dataset.theme;
     applyTheme(cur === 'dark' ? 'light' : 'dark');
   });
+}
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('apostador-theme', theme);
+  const btn = $('#btn-theme');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+/* ---------- Menu mobile ---------- */
+function initMobileMenu() {
+  const toggle = $('#menu-toggle');
+  const drawer = $('#mobile-drawer');
+  if (!toggle || !drawer) return;
+
+  const open  = () => { drawer.hidden = false; document.body.style.overflow = 'hidden'; };
+  const close = () => { drawer.hidden = true;  document.body.style.overflow = ''; };
+
+  toggle.addEventListener('click', () => {
+    drawer.hidden ? open() : close();
+  });
+  drawer.querySelector('[data-close]')?.addEventListener('click', close);
+  drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', close));
+
+  // Fecha ao navegar por hash
+  window.addEventListener('hashchange', close);
 }
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;

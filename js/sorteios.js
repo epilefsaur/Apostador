@@ -93,7 +93,7 @@ async function pageSorteio({ id }) {
   // Participações aprovadas (para contagem e lista, se autorizado pela RLS)
   const { data: aprovadas } = await db
     .from('participacoes')
-    .select('id, user_id, valor_cota, status, declarado_em, profiles(full_name, phone)')
+    .select('id, user_id, valor_cota, status, declarado_em, profiles!participacoes_user_id_fkey(full_name, phone)')
     .eq('sorteio_id', id)
     .eq('status', 'aprovado');
 
@@ -204,22 +204,24 @@ function statsSorteio({ totalCotas, totalArrecadado, minhasAprovadas, sorteio })
       stat('Minha fração', `${(minhaFracao * 100).toFixed(1)}%`, true),
     ]),
     premioPorCota != null
-      ? el('div', { class: 'mt-2 text-sm' }, [
-          el('div', { class: 'row-between' }, [
-            el('span', { class: 'text-muted' }, 'Prêmio total'),
-            el('strong', {}, fmtBRL(sorteio.premio_total)),
-          ]),
-          el('div', { class: 'row-between' }, [
-            el('span', { class: 'text-muted' }, 'Prêmio por cota'),
-            el('strong', {}, fmtBRL(premioPorCota)),
-          ]),
-          el('div', { class: 'row-between', style: 'color:var(--primary);font-weight:700;' }, [
-            el('span', {}, 'Seu prêmio estimado'),
-            el('span', {}, fmtBRL(meuPremio)),
-          ]),
-        ])
-      : el('div', { class: 'mt-2 text-sm text-soft' },
-          'Prêmio a definir — o administrador lançará o valor após o sorteio.'),
+  ? el('div', { class: 'mt-2 text-sm' }, [
+      el('div', { class: 'row-between' }, [
+        el('span', { class: 'text-muted' }, 'Prêmio estimado total'),
+        el('strong', {}, fmtBRL(sorteio.premio_total)),
+      ]),
+      el('div', { class: 'row-between' }, [
+        el('span', { class: 'text-muted' }, 'Estimativa por cota'),
+        el('strong', {}, fmtBRL(premioPorCota)),
+      ]),
+      el('div', { class: 'row-between', style: 'color:var(--primary);font-weight:700;' }, [
+        el('span', {}, 'Sua estimativa'),
+        el('span', {}, fmtBRL(meuPremio)),
+      ]),
+      el('div', { class: 'form-hint mt-1' },
+        'Valores estimados — o prêmio real será confirmado após o sorteio.'),
+    ])
+  : el('div', { class: 'mt-2 text-sm text-soft' },
+      'Prêmio a definir — o administrador informará o valor estimado.'),
   ]);
 }
 

@@ -16,6 +16,8 @@
 
   <!-- ===== HEADER ===== -->
   <header class="app-header">
+    <button class="icon-btn menu-toggle" id="menu-toggle" aria-label="Menu">☰</button>
+
     <a href="#/" class="brand" aria-label="Início">
       <span class="brand-logo">🎲</span>
       <span class="brand-name">Apostador</span>
@@ -33,6 +35,16 @@
       <a href="#/login" class="btn btn-ghost btn-sm" id="btn-login">Entrar</a>
     </div>
   </header>
+
+  <!-- ===== MENU MOBILE (DRAWER) ===== -->
+  <div class="mobile-drawer" id="mobile-drawer" hidden>
+    <div class="mobile-drawer-backdrop" data-close></div>
+    <nav class="mobile-drawer-panel">
+      <a href="#/"      data-nav="home">🏠 Início</a>
+      <a href="#/meus"  data-nav="meus" hidden>🎟️ Meus bolões</a>
+      <a href="#/admin" data-nav="admin" hidden>🛠️ Admin</a>
+    </nav>
+  </div>
 
   <!-- ===== CONTEÚDO (SPA) ===== -->
   <main id="app" class="app-main" aria-live="polite">

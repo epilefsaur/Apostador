@@ -91,6 +91,16 @@ function formSorteio(sorteio) {
   const inputPrazo  = input({ label: 'Prazo para participar', name: 'prazo_participacao', type: 'datetime-local', value: toLocalInput(sorteio?.prazo_participacao), required: true });
   const inputValor  = input({ label: 'Valor da cota (R$)', name: 'valor_cota', type: 'number', step: '0.01', min: '0.01', value: sorteio?.valor_cota || '', required: true });
   const inputPix    = input({ label: 'PIX copia e cola / chave', name: 'pix_chave', value: sorteio?.pix_chave || '', required: true, placeholder: 'Cole o código PIX ou a chave' });
+  const inputPremio = input({
+  label: 'Prêmio estimado (R$) — opcional',
+  name: 'premio_total',
+  type: 'number',
+  step: '0.01',
+  min: '0',
+  value: sorteio?.premio_total || '',
+  placeholder: '0,00',
+});
+
 
   const textareaDesc = el('div', { class: 'form-group' }, [
     el('label', { class: 'form-label' }, 'Descrição / como funciona'),
@@ -108,6 +118,7 @@ function formSorteio(sorteio) {
   ]));
   form.appendChild(inputValor);
   form.appendChild(inputPix);
+  form.appendChild(inputPremio);
   form.appendChild(textareaDesc);
 
   // Upload de capa
@@ -179,6 +190,7 @@ function formSorteio(sorteio) {
         prazo_participacao: new Date(fd.get('prazo_participacao')).toISOString(),
         valor_cota: Number(fd.get('valor_cota')),
         pix_chave: fd.get('pix_chave')?.toString().trim(),
+        premio_total: fd.get('premio_total') ? Number(fd.get('premio_total')) : null,
         imagem_capa_url: uploadedUrl,
       };
 
@@ -244,7 +256,7 @@ async function pageAdminSorteio({ id }) {
 
   const { data: parts } = await db
     .from('participacoes')
-    .select('id, status, valor_cota, declarado_em, aprovado_em, user_id, profiles(full_name, phone)')
+    .select('id, status, valor_cota, declarado_em, aprovado_em, user_id, profiles!participacoes_user_id_fkey(full_name, phone)')
     .eq('sorteio_id', id)
     .order('created_at', { ascending: false });
 
@@ -480,7 +492,11 @@ function abrirFormJogo(sorteioId) {
 /* ---------- Resultado (admin) ---------- */
 function blocoAdminResultado(sorteio, aprovadas, st) {
   const wrap = el('div', { class: 'card card-pad mb-2' });
-  wrap.appendChild(el('h3', { style: 'font-size:.95rem;margin-bottom:.6rem;' }, '🏁 Resultado oficial'));
+  const titulo = st === 'finalizado' ? '🏁 Resultado oficial'
+                : st === 'em_andamento' ? '🏁 Resultado (aguardando sorteio)'
+                : '🎁 Prêmio estimado (opcional)';
+  wrap.appendChild(el('h3', { style: 'font-size:.95rem;margin-bottom:.6rem;' }, titulo));
+ 
 
   if (st === 'finalizado') {
     wrap.appendChild(el('div', { class: 'text-sm text-muted mb-1' }, 'Dezenas sorteadas:'));

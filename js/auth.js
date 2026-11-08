@@ -37,8 +37,14 @@ function updateHeaderAuth() {
 
   $('#btn-login').hidden  = isLogged;
   $('#btn-logout').hidden = !isLogged;
-  $('.app-nav a[data-nav="meus"]').hidden  = !isLogged;
-  $('.app-nav a[data-nav="admin"]').hidden = !isAdmin;
+
+  // Nav desktop
+  $$('.app-nav a[data-nav="meus"]').forEach(a => a.hidden  = !isLogged);
+  $$('.app-nav a[data-nav="admin"]').forEach(a => a.hidden = !isAdmin);
+
+  // Nav mobile (drawer)
+  $$('.mobile-drawer-panel a[data-nav="meus"]').forEach(a => a.hidden  = !isLogged);
+  $$('.mobile-drawer-panel a[data-nav="admin"]').forEach(a => a.hidden = !isAdmin);
 }
 
 /* ---------- Cadastro ---------- */

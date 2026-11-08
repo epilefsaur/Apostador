@@ -148,6 +148,7 @@ function pageCadastro({ next } = {}) {
    ============================================================ */
 (async function bootstrap() {
   initTheme();
+  initMobileMenu();
   await initAuth();
   initRouter();
 })();

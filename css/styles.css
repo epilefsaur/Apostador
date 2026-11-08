@@ -597,3 +597,51 @@ p { margin: 0 0 .75rem; }
   .stats-grid { grid-template-columns: repeat(4, 1fr); }
   .app-main { padding: 1.5rem; padding-bottom: 5rem; }
 }
+
+/* ---------- Menu mobile (drawer) ---------- */
+.menu-toggle { display: inline-flex; }
+
+@media (min-width: 640px) {
+  .menu-toggle { display: none; }
+}
+
+.mobile-drawer {
+  position: fixed; inset: 0;
+  z-index: 80;
+}
+.mobile-drawer-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(15,23,42,.5);
+}
+.mobile-drawer-panel {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 78%;
+  max-width: 300px;
+  background: var(--surface);
+  padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  box-shadow: var(--shadow-lg);
+  animation: drawerIn .2s ease-out;
+}
+@keyframes drawerIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+.mobile-drawer-panel a {
+  padding: .8rem .9rem;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.mobile-drawer-panel a:hover { background: var(--surface-2); }
+.mobile-drawer-panel a.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
